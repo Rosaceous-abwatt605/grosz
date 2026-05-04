@@ -25,7 +25,7 @@ func TestPstrykParsesRates(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "test-token", r.Header.Get("Authorization"))
 		assert.Equal(t, "pricing", r.URL.Query().Get("metrics"))
-		json.NewEncoder(w).Encode(map[string]any{"frames": frames})
+		_ = json.NewEncoder(w).Encode(map[string]any{"frames": frames})
 	}))
 	defer srv.Close()
 
@@ -73,7 +73,7 @@ func TestPstrykPlaceholderDetection(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"frames": frames})
+		_ = json.NewEncoder(w).Encode(map[string]any{"frames": frames})
 	}))
 	defer srv.Close()
 
@@ -132,7 +132,7 @@ func TestPstrykCachesRates(t *testing.T) {
 	frames := makeFrames(now, 12, 0.40, 0.02)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"frames": frames})
+		_ = json.NewEncoder(w).Encode(map[string]any{"frames": frames})
 	}))
 	defer srv.Close()
 
@@ -159,7 +159,7 @@ func testStore(t *testing.T) *store.Store {
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	st, err := store.New(filepath.Join(t.TempDir(), "test.db"), log)
 	require.NoError(t, err)
-	t.Cleanup(func() { st.Close() })
+	t.Cleanup(func() { _ = st.Close() })
 	return st
 }
 

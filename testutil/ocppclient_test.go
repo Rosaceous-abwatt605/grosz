@@ -27,7 +27,7 @@ func TestIntegrationBootAndHeartbeat(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.New(filepath.Join(dir, "test.db"), log)
 	require.NoError(t, err)
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	// Start OCPP server
 	srv := ocppserver.NewServer(st, log)
@@ -57,7 +57,7 @@ func TestIntegrationBootAndHeartbeat(t *testing.T) {
 	// Send Heartbeat
 	hbConf, err := tcp.SendHeartbeat()
 	require.NoError(t, err)
-	assert.False(t, hbConf.CurrentTime.Time.IsZero())
+	assert.False(t, hbConf.CurrentTime.IsZero())
 
 	// Verify events recorded
 	events, err := st.RecentEvents(10, 0)
@@ -74,7 +74,7 @@ func TestIntegrationChargingSession(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.New(filepath.Join(dir, "test.db"), log)
 	require.NoError(t, err)
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	srv := ocppserver.NewServer(st, log)
 	port := 18888
@@ -160,7 +160,7 @@ func TestIntegrationRemoteStartStop(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.New(filepath.Join(dir, "test.db"), log)
 	require.NoError(t, err)
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	srv := ocppserver.NewServer(st, log)
 	port := 18889

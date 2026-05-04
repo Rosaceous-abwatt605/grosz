@@ -376,7 +376,7 @@ func (r *Renault) gigyaGetPersonID(session string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("gigya getAccountInfo: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Data struct {
@@ -406,7 +406,7 @@ func (r *Renault) gigyaGetJWT(session string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("gigya getJWT: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		IDToken   string `json:"id_token"`
@@ -433,7 +433,7 @@ func (r *Renault) getAccountID(personID, jwt string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("get accounts: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Accounts []struct {
@@ -479,7 +479,7 @@ func (r *Renault) getBatteryStatus(vin string) (*BatteryStatus, error) {
 	if err != nil {
 		return nil, fmt.Errorf("battery status: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
@@ -588,7 +588,7 @@ func (r *Renault) fetchVehicleDetails(vin string) {
 		r.markDetailsFetched(time.Now().Add(-23 * time.Hour)) // retry in ~1h
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
@@ -685,7 +685,7 @@ func (r *Renault) downloadImage(imageURL string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("download: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("download status %d", resp.StatusCode)

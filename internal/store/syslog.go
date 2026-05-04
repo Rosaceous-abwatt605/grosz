@@ -55,7 +55,7 @@ func (s *Store) RecentSystemEvents(n, offset int) ([]SystemEvent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query system events: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanSystemEvents(rows)
 }
@@ -69,7 +69,7 @@ func (s *Store) SystemEventsBySource(source string, limit, offset int) ([]System
 	if err != nil {
 		return nil, fmt.Errorf("query system events by source: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanSystemEvents(rows)
 }

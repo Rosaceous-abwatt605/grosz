@@ -35,7 +35,7 @@ func (s *Store) DailyIdleByDateRange(from, to time.Time) ([]DailyIdle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("daily idle by range: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []DailyIdle
 	for rows.Next() {

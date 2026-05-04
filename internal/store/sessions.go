@@ -107,7 +107,7 @@ func (s *Store) SessionHistory(limit, offset int) ([]Session, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query sessions: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	sessions := make([]Session, 0)
 	for rows.Next() {
@@ -134,7 +134,7 @@ func (s *Store) SessionsByDateRange(from, to time.Time, limit, offset int) ([]Se
 	if err != nil {
 		return nil, fmt.Errorf("query sessions by range: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	sessions := make([]Session, 0)
 	for rows.Next() {

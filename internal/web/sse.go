@@ -53,7 +53,7 @@ func (b *SSEBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Send initial ping
-	fmt.Fprintf(w, "event: ping\ndata: connected\n\n")
+	_, _ = fmt.Fprintf(w, "event: ping\ndata: connected\n\n")
 	flusher.Flush()
 
 	for {

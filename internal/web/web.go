@@ -330,7 +330,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if req.Username != user || passHash == "" || !checkPassword(passHash, req.Password) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]any{"error": "invalid credentials"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "invalid credentials"})
 		return
 	}
 
@@ -348,7 +348,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -367,7 +367,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
 func (s *Server) handleAuthCheck(w http.ResponseWriter, r *http.Request) {
@@ -381,7 +381,7 @@ func (s *Server) handleAuthCheck(w http.ResponseWriter, r *http.Request) {
 	if !authed {
 		w.WriteHeader(http.StatusUnauthorized)
 	}
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) isAuthenticated(r *http.Request) bool {
@@ -399,7 +399,7 @@ func (s *Server) requireAuth(handler http.HandlerFunc) http.HandlerFunc {
 		if !s.isAuthenticated(r) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]any{"error": "unauthorized"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "unauthorized"})
 			return
 		}
 		handler(w, r)

@@ -68,7 +68,7 @@ func (s *Store) HourlyConsumption(hours int) ([]HourlyEnergy, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query hourly consumption: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	result := make([]HourlyEnergy, 0)
 	for rows.Next() {
@@ -114,7 +114,7 @@ func (s *Store) RecentPhaseReadings(minutes int) ([]PhaseReading, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query phase readings: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	result := make([]PhaseReading, 0)
 	for rows.Next() {
@@ -162,7 +162,7 @@ func (s *Store) RecentChartMarkers(hours int) ([]ChartMarker, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query chart markers: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var markers []ChartMarker
 	for rows.Next() {

@@ -232,7 +232,7 @@ func (s *Scheduler) SetConfig(cfg Config) {
 	s.mu.Lock()
 	s.config = &cfg
 	s.mu.Unlock()
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(),
 		Source:    "scheduler",
 		Action:    "setConfig",
@@ -273,7 +273,7 @@ func (s *Scheduler) ClearSchedule() {
 		}
 	}
 	s.log.Info("schedule cleared", "clearedProfile", clearedProfile)
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(),
 		Source:    "scheduler",
 		Action:    "clearSchedule",
@@ -302,7 +302,7 @@ func (s *Scheduler) CancelSlot(date string) bool {
 	}
 	s.mu.Unlock()
 
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(),
 		Source:    "scheduler",
 		Action:    "cancelSlot",
@@ -336,7 +336,7 @@ func (s *Scheduler) RestoreSlot(date string) bool {
 	}
 	s.mu.Unlock()
 
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(),
 		Source:    "scheduler",
 		Action:    "restoreSlot",
@@ -411,7 +411,7 @@ func (s *Scheduler) preserveActiveSlot(slot *ScheduleSlot, wouldSkipKey string, 
 		"slotDate":            slot.Date,
 		"wouldSkip":           wouldSkipKey,
 	}
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(), Source: "scheduler", Action: "recompute",
 		Input:  input,
 		Result: result,
@@ -525,7 +525,7 @@ func (s *Scheduler) UpdateSoC(energyKWh float64) {
 		"oldSoC", currentSoC,
 		"newSoC", newSoC,
 	)
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(),
 		Source:    "scheduler",
 		Action:    "updateSoC",
@@ -617,7 +617,7 @@ func (s *Scheduler) recordPlugCheckSkip(reason, mode, cpID string) {
 	if !s.lastStartSent.IsZero() && time.Since(s.lastStartSent) < remoteCmdCooldown {
 		return
 	}
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(), Source: "scheduler", Action: "controlCharging", Level: "info",
 		Input:  map[string]any{"mode": mode, "cpID": cpID, "plugStatus": "0"},
 		Result: map[string]any{"plugCheckSkipped": reason, "action": "start"},
@@ -678,7 +678,7 @@ func (s *Scheduler) controlCharging() {
 			blocked, skipReason := s.isVehiclePlugBlocked()
 			if blocked {
 				s.log.Warn("charge blocked by vehicle plug check", "cpID", cpID, "mode", "force")
-				s.store.RecordSystemEvent(store.SystemEvent{
+				_ = s.store.RecordSystemEvent(store.SystemEvent{
 					Timestamp: time.Now(), Source: "scheduler", Action: "controlCharging", Level: "warn",
 					Input:  map[string]any{"mode": "force", "cpID": cpID},
 					Result: map[string]any{"blocked": "vehicle_plug_check", "plugStatus": "0"},
@@ -702,7 +702,7 @@ func (s *Scheduler) controlCharging() {
 			blocked, skipReason := s.isVehiclePlugBlocked()
 			if blocked {
 				s.log.Warn("charge blocked by vehicle plug check", "cpID", cpID, "mode", "schedule")
-				s.store.RecordSystemEvent(store.SystemEvent{
+				_ = s.store.RecordSystemEvent(store.SystemEvent{
 					Timestamp: time.Now(), Source: "scheduler", Action: "controlCharging", Level: "warn",
 					Input:  map[string]any{"mode": "schedule", "cpID": cpID, "shouldCharge": true},
 					Result: map[string]any{"blocked": "vehicle_plug_check", "plugStatus": "0"},
@@ -732,7 +732,7 @@ func (s *Scheduler) sendStart(cpID, mode string) {
 	} else {
 		_ = s.store.InsertChartMarker("start", time.Now())
 	}
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(), Source: "scheduler", Action: "controlCharging",
 		Level: levelFromErr(err),
 		Input:  map[string]any{"mode": mode, "cpID": cpID},
@@ -755,7 +755,7 @@ func (s *Scheduler) sendStop(cpID string, txnID int, mode string) {
 	// "stop" chart marker is emitted by the OCPP handler when the resulting
 	// StopTransaction arrives, so the timestamp matches the actual stop time
 	// (and we don't double-mark when the EV stops on its own).
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(), Source: "scheduler", Action: "controlCharging",
 		Level: levelFromErr(err),
 		Input:  map[string]any{"mode": mode, "cpID": cpID, "txnID": txnID},
@@ -905,7 +905,7 @@ func (s *Scheduler) recompute() {
 		s.skipReasonKey = skipKey
 		s.skipParams = skipParams
 		s.mu.Unlock()
-		s.store.RecordSystemEvent(store.SystemEvent{
+		_ = s.store.RecordSystemEvent(store.SystemEvent{
 			Timestamp: time.Now(), Source: "scheduler", Action: "recompute",
 			Input:  map[string]any{"targetEnergy": fresh.TargetEnergy, "maxPrice": cfg.MaxPrice, "ratesCount": len(rates), "currentSoC": cfg.CurrentSoC, "forces": len(forcePeriods)},
 			Result: map[string]any{"skipped": true, "reason": skipReason},
@@ -982,7 +982,7 @@ func (s *Scheduler) recompute() {
 	if inProgress != nil {
 		result["mergedActiveSlot"] = inProgress.Date
 	}
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(), Source: "scheduler", Action: "recompute",
 		Input: map[string]any{
 			"targetEnergy": fresh.TargetEnergy, "maxPower": chargePower,
@@ -1064,7 +1064,7 @@ func (s *Scheduler) applyProfile(sched *Schedule) {
 
 	if err := s.charger.SetChargingProfile(cpID, 1, profile); err != nil {
 		s.log.Warn("failed to set charging profile", "err", err)
-		s.store.RecordSystemEvent(store.SystemEvent{
+		_ = s.store.RecordSystemEvent(store.SystemEvent{
 			Timestamp: time.Now(), Source: "scheduler", Action: "applyProfile", Level: "warn",
 			Input:  map[string]any{"cpID": cpID},
 			Result: map[string]any{"error": err.Error()},
@@ -1078,7 +1078,7 @@ func (s *Scheduler) applyProfile(sched *Schedule) {
 	s.mu.Unlock()
 
 	s.log.Info("charging profile applied", "hash", hash)
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(), Source: "scheduler", Action: "applyProfile",
 		Input:  map[string]any{"cpID": cpID, "periods": len(sched.ActivePeriods())},
 		Result: map[string]any{"applied": true, "hash": hash},

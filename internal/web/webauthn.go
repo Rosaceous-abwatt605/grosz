@@ -159,7 +159,7 @@ func (s *Server) handleWebAuthnRegisterBegin(w http.ResponseWriter, r *http.Requ
 	key := s.challenges.store(session)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"options":      creation,
 		"challengeKey": key,
 	})
@@ -219,7 +219,7 @@ func (s *Server) handleWebAuthnRegisterComplete(w http.ResponseWriter, r *http.R
 	s.log.Info("webauthn credential registered", "name", name)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
 // --- Authentication (public) ---
@@ -248,7 +248,7 @@ func (s *Server) handleWebAuthnLoginBegin(w http.ResponseWriter, r *http.Request
 	key := s.challenges.store(session)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"options":      assertion,
 		"challengeKey": key,
 	})
@@ -312,7 +312,7 @@ func (s *Server) handleWebAuthnLoginComplete(w http.ResponseWriter, r *http.Requ
 	s.log.Info("webauthn login successful")
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
 // --- Credential management (requires auth) ---
@@ -340,7 +340,7 @@ func (s *Server) handleWebAuthnCredentials(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"credentials": result})
+	_ = json.NewEncoder(w).Encode(map[string]any{"credentials": result})
 }
 
 func (s *Server) handleWebAuthnDeleteCredential(w http.ResponseWriter, r *http.Request) {
@@ -358,6 +358,6 @@ func (s *Server) handleWebAuthnDeleteCredential(w http.ResponseWriter, r *http.R
 	s.log.Info("webauthn credential deleted", "id", id)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 

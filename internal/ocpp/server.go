@@ -143,7 +143,7 @@ func NewServer(st *store.Store, log *slog.Logger) *Server {
 		s.mu.Unlock()
 		s.fireStatusHook()
 		if s.store != nil {
-			s.store.RecordSystemEvent(store.SystemEvent{
+			_ = s.store.RecordSystemEvent(store.SystemEvent{
 				Timestamp: time.Now(), Source: "ocpp", Action: "chargerDisconnected",
 				Input: map[string]any{"cpID": id},
 			})

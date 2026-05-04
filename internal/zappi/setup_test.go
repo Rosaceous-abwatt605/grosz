@@ -27,7 +27,7 @@ func TestZappiSetupSequence(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.New(filepath.Join(dir, "test.db"), log)
 	require.NoError(t, err)
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	// Seed settings
 	require.NoError(t, st.SetMany(map[string]string{
@@ -74,7 +74,7 @@ func TestNonZappiSkipsSetup(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.New(filepath.Join(dir, "test.db"), log)
 	require.NoError(t, err)
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	srv := ocppserver.NewServer(st, log)
 

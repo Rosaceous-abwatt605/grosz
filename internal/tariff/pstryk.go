@@ -144,7 +144,7 @@ func (p *Pstryk) fetchAndStore() {
 	token := p.store.GetDefault("tariff.pstryk_token", "")
 	if token == "" {
 		p.log.Warn("pstryk token not configured, skipping fetch")
-		p.store.RecordSystemEvent(store.SystemEvent{
+		_ = p.store.RecordSystemEvent(store.SystemEvent{
 			Timestamp: time.Now(), Source: "tariff", Action: "fetchRates", Level: "warn",
 			Result: map[string]any{"skipped": true, "reason": "token not configured"},
 		})
@@ -154,7 +154,7 @@ func (p *Pstryk) fetchAndStore() {
 	rates, err := p.fetch(token)
 	if err != nil {
 		p.log.Warn("failed to fetch rates", "err", err)
-		p.store.RecordSystemEvent(store.SystemEvent{
+		_ = p.store.RecordSystemEvent(store.SystemEvent{
 			Timestamp: time.Now(), Source: "tariff", Action: "fetchRates", Level: "warn",
 			Result: map[string]any{"error": err.Error()},
 		})
@@ -165,7 +165,7 @@ func (p *Pstryk) fetchAndStore() {
 	beforeCount := len(rates)
 	rates = filterPlaceholders(rates)
 	if len(rates) < beforeCount {
-		p.store.RecordSystemEvent(store.SystemEvent{
+		_ = p.store.RecordSystemEvent(store.SystemEvent{
 			Timestamp: time.Now(), Source: "tariff", Action: "filterPlaceholders",
 			Input:  map[string]any{"beforeCount": beforeCount},
 			Result: map[string]any{"afterCount": len(rates), "removed": beforeCount - len(rates)},
@@ -174,7 +174,7 @@ func (p *Pstryk) fetchAndStore() {
 
 	if len(rates) == 0 {
 		p.log.Warn("no valid rates returned")
-		p.store.RecordSystemEvent(store.SystemEvent{
+		_ = p.store.RecordSystemEvent(store.SystemEvent{
 			Timestamp: time.Now(), Source: "tariff", Action: "fetchRates", Level: "warn",
 			Result: map[string]any{"error": "no valid rates returned"},
 		})
@@ -195,7 +195,7 @@ func (p *Pstryk) fetchAndStore() {
 		"from", rates[0].Start.Format(time.RFC3339),
 		"to", rates[len(rates)-1].End.Format(time.RFC3339),
 	)
-	p.store.RecordSystemEvent(store.SystemEvent{
+	_ = p.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(), Source: "tariff", Action: "fetchRates",
 		Result: map[string]any{
 			"count": len(rates),
@@ -229,7 +229,7 @@ func (p *Pstryk) fetch(token string) ([]Rate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == 429 {
 		return nil, fmt.Errorf("rate limited (429)")

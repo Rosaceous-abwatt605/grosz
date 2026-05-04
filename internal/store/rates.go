@@ -56,7 +56,7 @@ func (s *Store) LoadRates(provider string) ([]Rate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query rates: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var rates []Rate
 	for rows.Next() {
@@ -84,7 +84,7 @@ func (s *Store) RatesForPeriod(from, to time.Time) ([]Rate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query rates for period: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var rates []Rate
 	for rows.Next() {

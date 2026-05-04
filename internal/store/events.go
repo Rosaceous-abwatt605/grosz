@@ -47,7 +47,7 @@ func (s *Store) RecentEvents(n, offset int) ([]Event, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query events: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanEvents(rows)
 }
@@ -61,7 +61,7 @@ func (s *Store) EventsByAction(action string, limit, offset int) ([]Event, error
 	if err != nil {
 		return nil, fmt.Errorf("query events by action: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanEvents(rows)
 }
@@ -100,7 +100,7 @@ func (s *Store) LatestEnergyForTransaction(txnID int) (float64, time.Time, bool)
 	if err != nil {
 		return 0, time.Time{}, false
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var tsStr, payload string
@@ -229,7 +229,7 @@ func (s *Store) EventsSince(afterID int64, limit int) ([]Event, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query events since: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanEvents(rows)
 }

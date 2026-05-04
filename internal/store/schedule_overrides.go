@@ -114,7 +114,7 @@ func (s *Store) LoadOverrides(after time.Time) ([]ScheduleOverride, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query overrides: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []ScheduleOverride
 	for rows.Next() {

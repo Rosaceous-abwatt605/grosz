@@ -49,7 +49,7 @@ func newAPITestServer(t *testing.T) (*Server, *testutil.TestChargePoint, *ocpp.S
 	dir := t.TempDir()
 	st, err := store.New(filepath.Join(dir, "test.db"), log)
 	require.NoError(t, err)
-	t.Cleanup(func() { st.Close() })
+	t.Cleanup(func() { _ = st.Close() })
 
 	srv := ocpp.NewServer(st, log)
 

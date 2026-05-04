@@ -104,7 +104,7 @@ func main() {
 		log.Error("failed to open database", "err", err)
 		os.Exit(1)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	// Seed defaults on first run
 	if err := st.SeedDefaults(defaultSettings); err != nil {

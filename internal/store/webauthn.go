@@ -57,7 +57,7 @@ func (s *Store) ListCredentials() ([]WebAuthnCredential, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list credentials: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []WebAuthnCredential
 	for rows.Next() {

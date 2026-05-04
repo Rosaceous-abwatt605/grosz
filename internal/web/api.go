@@ -259,7 +259,7 @@ func (s *Server) handleCreateOverride(w http.ResponseWriter, r *http.Request) {
 		"powerW": req.PowerW,
 	}
 	if err != nil {
-		s.store.RecordSystemEvent(store.SystemEvent{
+		_ = s.store.RecordSystemEvent(store.SystemEvent{
 			Timestamp: time.Now(), Source: "scheduler", Action: "createOverride", Level: "warn",
 			Input: input, Result: map[string]any{"error": err.Error()},
 		})
@@ -272,7 +272,7 @@ func (s *Server) handleCreateOverride(w http.ResponseWriter, r *http.Request) {
 	}
 	o.ID = id
 
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(), Source: "scheduler", Action: "createOverride",
 		Input: input, Result: map[string]any{"id": id},
 	})
@@ -291,7 +291,7 @@ func (s *Server) handleDeleteOverride(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.DeleteOverride(id); err != nil {
-		s.store.RecordSystemEvent(store.SystemEvent{
+		_ = s.store.RecordSystemEvent(store.SystemEvent{
 			Timestamp: time.Now(), Source: "scheduler", Action: "deleteOverride", Level: "warn",
 			Input: map[string]any{"id": id}, Result: map[string]any{"error": err.Error()},
 		})
@@ -303,7 +303,7 @@ func (s *Server) handleDeleteOverride(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.store.RecordSystemEvent(store.SystemEvent{
+	_ = s.store.RecordSystemEvent(store.SystemEvent{
 		Timestamp: time.Now(), Source: "scheduler", Action: "deleteOverride",
 		Input: map[string]any{"id": id}, Result: map[string]any{"ok": true},
 	})
@@ -325,7 +325,7 @@ func (s *Server) schedulerSchedule() *scheduler.Schedule {
 func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 func (s *Server) handleChargerStart(w http.ResponseWriter, r *http.Request) {
@@ -718,7 +718,7 @@ func (s *Server) handleSessionReportHTML(w http.ResponseWriter, r *http.Request)
 		_, _ = fmt.Fprint(w, "</table>\n")
 	}
 
-	fmt.Fprintf(w, `<div class="footer">Generated %s — grosz EV Charging Manager</div>
+	_, _ = fmt.Fprintf(w, `<div class="footer">Generated %s — grosz EV Charging Manager</div>
 </body>
 </html>`, time.Now().Format("2006-01-02 15:04"))
 }
@@ -789,7 +789,7 @@ func (s *Server) handleDeleteExternalCost(w http.ResponseWriter, r *http.Request
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 // formatCostLogDescriptions sets the Description field for charging items
