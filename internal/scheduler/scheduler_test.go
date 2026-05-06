@@ -266,6 +266,248 @@ func TestComputeScheduleMultiDay(t *testing.T) {
 	}
 }
 
+// TestComputeScheduleSpillsToTomorrowWhenTodayBlockedByMaxPrice covers the
+// late/missed plug-in case: today's window has rates but all are above
+// MaxPrice, so today's slot is empty and the full target must spill into
+// tomorrow's deadline window.
+func TestComputeScheduleSpillsToTomorrowWhenTodayBlockedByMaxPrice(t *testing.T) {
+	now := time.Now().Truncate(time.Hour)
+	firstDeadline := now.Add(4 * time.Hour)
+
+	rates := make([]tariff.Rate, 28)
+	for i := 0; i < 4; i++ {
+		rates[i] = tariff.Rate{
+			Start: now.Add(time.Duration(i) * time.Hour),
+			End:   now.Add(time.Duration(i+1) * time.Hour),
+			Price: 1.50, // all above MaxPrice
+		}
+	}
+	for i := 4; i < 28; i++ {
+		rates[i] = tariff.Rate{
+			Start: now.Add(time.Duration(i) * time.Hour),
+			End:   now.Add(time.Duration(i+1) * time.Hour),
+			Price: 0.40,
+		}
+	}
+
+	cfg := Config{
+		TargetEnergy:   22, // ceil(22*1.03/11) = 3 hours
+		Deadline:       firstDeadline,
+		MaxPower:       11000,
+		MaxPrice:       1.00,
+		ChargeHeadroom: 3,
+	}
+
+	sched := ComputeSchedule(rates, cfg, 11000)
+	require.NotNil(t, sched, "should produce a schedule by spilling into tomorrow")
+	require.Len(t, sched.Slots, 1, "today's window had no eligible rates; only tomorrow's slot should appear")
+	assert.GreaterOrEqual(t, sched.Slots[0].Energy, 22.0, "tomorrow's slot should cover the full target")
+	assert.True(t, sched.Slots[0].Deadline.After(firstDeadline), "spilled slot should target the next deadline")
+}
+
+// TestComputeScheduleCapsAtTwoCycles ensures we don't iterate beyond
+// tomorrow even when remainingEnergy is still positive after two windows.
+func TestComputeScheduleCapsAtTwoCycles(t *testing.T) {
+	now := time.Now().Truncate(time.Hour)
+	firstDeadline := now.Add(2 * time.Hour)
+
+	// Rates for 4 days, all expensive enough that one slot can't fit a huge target.
+	rates := make([]tariff.Rate, 96)
+	for i := 0; i < 96; i++ {
+		rates[i] = tariff.Rate{
+			Start: now.Add(time.Duration(i) * time.Hour),
+			End:   now.Add(time.Duration(i+1) * time.Hour),
+			Price: 0.50,
+		}
+	}
+
+	cfg := Config{
+		TargetEnergy:   500, // unrealistic huge target; would otherwise iterate 4 days
+		Deadline:       firstDeadline,
+		MaxPower:       11000,
+		ChargeHeadroom: 3,
+	}
+
+	sched := ComputeSchedule(rates, cfg, 11000)
+	require.NotNil(t, sched)
+	assert.LessOrEqual(t, len(sched.Slots), 2, "should never plan beyond tomorrow")
+}
+
+// --- mergeActiveSlotPreservingActive ---
+
+func mockNow(t *testing.T, at time.Time) {
+	t.Helper()
+	orig := timeNow
+	timeNow = func() time.Time { return at }
+	t.Cleanup(func() { timeNow = orig })
+}
+
+// Mid-session, the next adjacent recomputed hour should extend the active
+// period's End so the running OCPP transaction continues seamlessly.
+func TestMergeActiveSlotExtendsAdjacent(t *testing.T) {
+	day := time.Date(2026, 5, 6, 0, 0, 0, 0, time.UTC)
+	now := day.Add(2*time.Hour + 30*time.Minute) // 02:30, mid-active-period
+	mockNow(t, now)
+
+	active := SchedulePeriod{
+		Start: day.Add(2 * time.Hour),
+		End:   day.Add(3 * time.Hour),
+		Power: 11000, Price: 0.30,
+	}
+	inProgress := ScheduleSlot{
+		Date:     "2026-05-06",
+		Deadline: day.Add(7 * time.Hour),
+		Periods:  []SchedulePeriod{active},
+	}
+
+	// Recomputed today picks 03:00–04:00 (adjacent to active.End=03:00) at
+	// the same power — should merge into the active period.
+	recomputed := &Schedule{
+		Slots: []ScheduleSlot{
+			{
+				Date:     "2026-05-06",
+				Deadline: day.Add(7 * time.Hour),
+				Periods: []SchedulePeriod{
+					{Start: day.Add(3 * time.Hour), End: day.Add(4 * time.Hour), Power: 11000, Price: 0.40},
+				},
+			},
+		},
+	}
+
+	merged := mergeActiveSlotPreservingActive(recomputed, cloneSlot(inProgress))
+	require.NotNil(t, merged)
+	require.Len(t, merged.Slots, 1)
+	require.Len(t, merged.Slots[0].Periods, 1, "adjacent period should be merged into active, not appended")
+
+	p := merged.Slots[0].Periods[0]
+	assert.Equal(t, active.Start, p.Start, "active Start unchanged")
+	assert.Equal(t, day.Add(4*time.Hour), p.End, "active End extended through adjacent hour")
+	assert.Equal(t, float64(11000), p.Power)
+	// Volume-weighted price: (0.30*11 + 0.40*11) / 22 = 0.35
+	assert.InDelta(t, 0.35, p.Price, 0.001)
+}
+
+// Mid-session with no adjacent recomputed hour — non-adjacent later periods
+// are appended as separate windows; active period left intact.
+func TestMergeActiveSlotAppendsNonAdjacent(t *testing.T) {
+	day := time.Date(2026, 5, 6, 0, 0, 0, 0, time.UTC)
+	now := day.Add(2*time.Hour + 30*time.Minute)
+	mockNow(t, now)
+
+	active := SchedulePeriod{
+		Start: day.Add(2 * time.Hour),
+		End:   day.Add(3 * time.Hour),
+		Power: 11000, Price: 0.30,
+	}
+	inProgress := ScheduleSlot{
+		Date:     "2026-05-06",
+		Deadline: day.Add(7 * time.Hour),
+		Periods:  []SchedulePeriod{active},
+	}
+
+	recomputed := &Schedule{
+		Slots: []ScheduleSlot{
+			{
+				Date:     "2026-05-06",
+				Deadline: day.Add(7 * time.Hour),
+				Periods: []SchedulePeriod{
+					{Start: day.Add(5 * time.Hour), End: day.Add(6 * time.Hour), Power: 11000, Price: 0.20},
+				},
+			},
+		},
+	}
+
+	merged := mergeActiveSlotPreservingActive(recomputed, cloneSlot(inProgress))
+	require.NotNil(t, merged)
+	require.Len(t, merged.Slots, 1)
+	require.Len(t, merged.Slots[0].Periods, 2)
+
+	assert.Equal(t, active.Start, merged.Slots[0].Periods[0].Start)
+	assert.Equal(t, active.End, merged.Slots[0].Periods[0].End, "active End preserved (no adjacent)")
+	assert.Equal(t, day.Add(5*time.Hour), merged.Slots[0].Periods[1].Start)
+}
+
+// Mid-session, recompute today is empty (nothing eligible). Active period
+// preserved verbatim; tomorrow's slot stays.
+func TestMergeActiveSlotEmptyRecomputeToday(t *testing.T) {
+	day := time.Date(2026, 5, 6, 0, 0, 0, 0, time.UTC)
+	now := day.Add(2*time.Hour + 30*time.Minute)
+	mockNow(t, now)
+
+	active := SchedulePeriod{
+		Start: day.Add(2 * time.Hour),
+		End:   day.Add(3 * time.Hour),
+		Power: 11000, Price: 0.30,
+	}
+	inProgress := ScheduleSlot{
+		Date:     "2026-05-06",
+		Deadline: day.Add(7 * time.Hour),
+		Periods:  []SchedulePeriod{active},
+	}
+
+	tomorrow := ScheduleSlot{
+		Date:     "2026-05-07",
+		Deadline: day.Add(31 * time.Hour),
+		Periods: []SchedulePeriod{
+			{Start: day.Add(26 * time.Hour), End: day.Add(28 * time.Hour), Power: 11000, Price: 0.25},
+		},
+	}
+	recomputed := &Schedule{Slots: []ScheduleSlot{tomorrow}}
+
+	merged := mergeActiveSlotPreservingActive(recomputed, cloneSlot(inProgress))
+	require.NotNil(t, merged)
+	require.Len(t, merged.Slots, 2)
+
+	today := merged.Slots[0]
+	require.Len(t, today.Periods, 1)
+	assert.Equal(t, active, today.Periods[0], "active preserved verbatim when no recomputed today-slot")
+
+	tom := merged.Slots[1]
+	assert.Equal(t, "2026-05-07", tom.Date)
+	require.Len(t, tom.Periods, 1)
+}
+
+// When the recomputed period overlaps the active period (would-be conflict),
+// it must be filtered out — the active period owns its time range exclusively.
+func TestMergeActiveSlotIgnoresOverlappingRecomputedPeriods(t *testing.T) {
+	day := time.Date(2026, 5, 6, 0, 0, 0, 0, time.UTC)
+	now := day.Add(2*time.Hour + 30*time.Minute)
+	mockNow(t, now)
+
+	active := SchedulePeriod{
+		Start: day.Add(2 * time.Hour),
+		End:   day.Add(4 * time.Hour),
+		Power: 11000, Price: 0.30,
+	}
+	inProgress := ScheduleSlot{
+		Date:     "2026-05-06",
+		Deadline: day.Add(7 * time.Hour),
+		Periods:  []SchedulePeriod{active},
+	}
+
+	// Recomputed picks 03:00-04:00 (overlaps active) and 04:00-05:00 (adjacent).
+	recomputed := &Schedule{
+		Slots: []ScheduleSlot{
+			{
+				Date:     "2026-05-06",
+				Deadline: day.Add(7 * time.Hour),
+				Periods: []SchedulePeriod{
+					{Start: day.Add(3 * time.Hour), End: day.Add(4 * time.Hour), Power: 11000, Price: 0.10},
+					{Start: day.Add(4 * time.Hour), End: day.Add(5 * time.Hour), Power: 11000, Price: 0.40},
+				},
+			},
+		},
+	}
+
+	merged := mergeActiveSlotPreservingActive(recomputed, cloneSlot(inProgress))
+	require.NotNil(t, merged)
+	require.Len(t, merged.Slots, 1)
+	require.Len(t, merged.Slots[0].Periods, 1, "overlapping period dropped, adjacent merged")
+	p := merged.Slots[0].Periods[0]
+	assert.Equal(t, active.Start, p.Start)
+	assert.Equal(t, day.Add(5*time.Hour), p.End, "extended through adjacent 04:00-05:00")
+}
+
 func TestNextDeadline(t *testing.T) {
 	d := nextDeadline("07:00")
 	assert.Equal(t, 7, d.Hour())

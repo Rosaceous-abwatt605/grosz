@@ -87,6 +87,26 @@ func (s *Store) StopSession(txnID int, stopTime time.Time, meterStop, energy, co
 	return nil
 }
 
+// SessionsOverlapping reports whether any session intersects [start, end).
+// An active session (no stop_time) overlaps as long as its start_time is
+// before end. Used by the scheduler to detect "missed" planned periods —
+// when a scheduled charging hour elapsed without any session touching it.
+func (s *Store) SessionsOverlapping(start, end time.Time) (bool, error) {
+	startStr := start.UTC().Format(time.RFC3339)
+	endStr := end.UTC().Format(time.RFC3339)
+	var count int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM charging_sessions
+		 WHERE start_time < ?
+		   AND (stop_time IS NULL OR stop_time > ?)`,
+		endStr, startStr,
+	).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("sessions overlapping: %w", err)
+	}
+	return count > 0, nil
+}
+
 // ActiveSession returns the currently active session, if any.
 func (s *Store) ActiveSession() (*Session, error) {
 	return s.scanSession(

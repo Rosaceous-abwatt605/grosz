@@ -44,3 +44,4 @@ func TestInsertChartMarker_PreservesType(t *testing.T) {
 		assert.True(t, got[typ], "marker type %s missing", typ)
 	}
 }
+

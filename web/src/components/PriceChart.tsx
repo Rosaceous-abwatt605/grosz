@@ -87,8 +87,9 @@ export function PriceChart({ rates, schedule, consumption, markers, timezone }: 
   const toHourKey = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()).getTime();
   if (consumption?.length) {
     for (const c of consumption) {
-      consumptionMap.set(toHourKey(new Date(c.hour)), c.energyWh);
-      if (c.energyWh > maxWh) maxWh = c.energyWh;
+      const wh = Math.max(0, c.energyWh);
+      consumptionMap.set(toHourKey(new Date(c.hour)), wh);
+      if (wh > maxWh) maxWh = wh;
     }
   }
   const hasConsumption = maxWh > 0;

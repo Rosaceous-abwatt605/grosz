@@ -7,12 +7,22 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/consi/grosz/internal/store"
 )
 
+// meterResetThresholdWh is the smallest drop in cumulative meter energy that
+// we treat as a counter reset. Smaller decreases (sensor noise, brief stale
+// reads) are clamped silently to the previous effective value.
+const meterResetThresholdWh = 1000.0
+
+// meterEnergyOffsetSetting is the settings key holding the cumulative offset
+// applied to raw meter readings to keep the stored series monotonic across
+// counter resets.
+const meterEnergyOffsetSetting = "meter.energy_offset_wh"
 
 type stateResponse struct {
 	MultiSensor struct {
@@ -56,6 +66,10 @@ type Poller struct {
 	live             LiveState
 	onUpdate         func(LiveState)
 
+	energyOffset    float64 // cumulative offset added to raw meter values
+	lastEffective   float64 // last value we wrote to DB (post-offset)
+	energyInited    bool    // energy state loaded from settings/DB
+
 	cancel context.CancelFunc
 }
 
@@ -94,6 +108,58 @@ func (p *Poller) SetOnUpdate(fn func(LiveState)) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.onUpdate = fn
+}
+
+// initEnergyState loads the persisted offset and the last stored effective
+// reading. Called lazily on the first poll so a fresh DB / first-run scenario
+// behaves correctly (no data → 0 offset, 0 lastEffective → no spurious reset
+// detection).
+func (p *Poller) initEnergyState() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.energyInited {
+		return
+	}
+	p.energyOffset = p.store.GetFloat(meterEnergyOffsetSetting, 0)
+	if last, err := p.store.LatestMeterReading(); err == nil && last != nil {
+		p.lastEffective = last.EnergyWh
+	}
+	p.energyInited = true
+}
+
+// adjustEnergy converts a raw cumulative meter reading into the effective value
+// to store, applying the persisted offset and detecting/handling counter
+// resets. Resets bump the offset so the new effective value continues from the
+// previous one (the reset minute counts as ~0 Wh consumed). Tiny decreases
+// below the reset threshold are clamped to the previous effective value.
+func (p *Poller) adjustEnergy(rawWh float64) float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	effective := rawWh + p.energyOffset
+	if p.lastEffective > 0 && effective < p.lastEffective-meterResetThresholdWh {
+		prev := p.lastEffective
+		p.energyOffset += p.lastEffective - effective
+		effective = rawWh + p.energyOffset
+		if err := p.store.Set(meterEnergyOffsetSetting, strconv.FormatFloat(p.energyOffset, 'f', -1, 64)); err != nil {
+			p.log.Warn("failed to persist meter offset", "err", err)
+		}
+		p.log.Warn("meter counter reset detected",
+			"raw_wh", rawWh,
+			"previous_effective_wh", prev,
+			"new_offset_wh", p.energyOffset,
+		)
+		_ = p.store.RecordSystemEvent(store.SystemEvent{
+			Timestamp: time.Now(), Source: "meter", Action: "reset_detected", Level: "warn",
+			Input:  map[string]any{"raw_wh": rawWh, "previous_effective_wh": prev},
+			Result: map[string]any{"new_offset_wh": p.energyOffset},
+		})
+	} else if effective < p.lastEffective {
+		// Small decrease (within threshold) — clamp to keep the series monotonic.
+		effective = p.lastEffective
+	}
+	p.lastEffective = effective
+	return effective
 }
 
 func (p *Poller) loop(ctx context.Context) {
@@ -167,7 +233,9 @@ func (p *Poller) poll(baseURL string) {
 	}
 
 	powerW := sensorVal(0, "activePower")
-	energyWh := sensorVal(0, "forwardActiveEnergy")
+	rawEnergyWh := sensorVal(0, "forwardActiveEnergy")
+	p.initEnergyState()
+	energyWh := p.adjustEnergy(rawEnergyWh)
 
 	live := LiveState{
 		TotalPower: powerW,

@@ -148,6 +148,11 @@ type Scheduler struct {
 	lastProfileHash string    // hash of last successfully applied charging profile
 	lastProfileSent time.Time // when last SetChargingProfile was sent
 
+	// Tracks the last recompute timestamp. Periods of the previous schedule
+	// whose End falls between lastRecomputeAt and now are candidates for
+	// missed-period detection (no overlapping charging session).
+	lastRecomputeAt time.Time
+
 	onRecompute func() // optional callback fired after every recompute
 }
 
@@ -421,6 +426,167 @@ func (s *Scheduler) preserveActiveSlot(slot *ScheduleSlot, wouldSkipKey string, 
 	// charger's profile state consistent if the previous apply was lost.
 	s.applyProfile(preserved)
 	s.fireOnRecompute()
+}
+
+// detectMissedPeriods scans the previous schedule for charging periods that
+// elapsed since the last recompute and emits a `missed_period` system event
+// for any that had no overlapping charging session — i.e. the car wasn't
+// plugged in (or refused to charge) when its scheduled hour came.
+//
+// Detection is observability-only. The recompute logic separately drives a
+// new schedule from current SoC; this function exists so a user reviewing
+// the system_events log can see *why* the schedule has shifted to add
+// recovery hours.
+func (s *Scheduler) detectMissedPeriods(prev *Schedule) {
+	now := timeNow()
+	defer func() {
+		s.mu.Lock()
+		s.lastRecomputeAt = now
+		s.mu.Unlock()
+	}()
+
+	if prev == nil {
+		return
+	}
+	s.mu.RLock()
+	last := s.lastRecomputeAt
+	s.mu.RUnlock()
+	if last.IsZero() {
+		return // first recompute — no prior window to scan
+	}
+
+	for _, p := range prev.ActivePeriods() {
+		if p.Power <= 0 {
+			continue
+		}
+		// Only inspect periods that fully ended within the scan window
+		// (last, now]. Periods still in progress or already finalised in a
+		// prior recompute are skipped.
+		if !p.End.After(last) || p.End.After(now) {
+			continue
+		}
+
+		overlaps, err := s.store.SessionsOverlapping(p.Start, p.End)
+		if err != nil {
+			s.log.Debug("missed-period overlap query failed", "err", err)
+			continue
+		}
+		if overlaps {
+			continue
+		}
+
+		hrs := p.End.Sub(p.Start).Hours()
+		plannedKWh := math.Round(p.Power/1000*hrs*100) / 100
+
+		s.log.Warn("scheduled charging period missed (no session overlap)",
+			"start", p.Start, "end", p.End, "plannedKWh", plannedKWh, "source", p.Source)
+		_ = s.store.RecordSystemEvent(store.SystemEvent{
+			Timestamp: time.Now(),
+			Source:    "scheduler",
+			Action:    "missed_period",
+			Level:     "warn",
+			Input: map[string]any{
+				"start":      p.Start.Format(time.RFC3339),
+				"end":        p.End.Format(time.RFC3339),
+				"plannedKWh": plannedKWh,
+				"source":     p.Source,
+			},
+			Result: map[string]any{"reason": "no_overlapping_session"},
+		})
+	}
+}
+
+// mergeActiveSlotPreservingActive merges the in-progress slot from the
+// previous schedule into the recomputed sched, replacing sched's same-date
+// slot. The active period (the one whose [Start, End) contains now and has
+// Power > 0) keeps its Start, but its End may grow to absorb adjacent
+// recomputed periods that match its power — extending the running session
+// continuously without an OCPP zero-power gap. Non-adjacent recomputed
+// periods after the active period are appended verbatim. Other periods of
+// the in-progress slot are kept as-is.
+//
+// The active period never shrinks, splits, or shifts: recompute can never
+// disrupt an ongoing transaction. If the in-progress slot has no period
+// containing now (race at the boundary), falls back to a strict pin.
+func mergeActiveSlotPreservingActive(sched *Schedule, in ScheduleSlot) *Schedule {
+	now := timeNow()
+	activeIdx := -1
+	for i, p := range in.Periods {
+		if !now.Before(p.Start) && now.Before(p.End) && p.Power > 0 {
+			activeIdx = i
+			break
+		}
+	}
+	if activeIdx < 0 {
+		return mergeInProgressSlot(sched, in)
+	}
+
+	var recomputed *ScheduleSlot
+	if sched != nil {
+		for i := range sched.Slots {
+			if sched.Slots[i].Date == in.Date {
+				recomputed = &sched.Slots[i]
+				break
+			}
+		}
+	}
+
+	merged := cloneSlot(in)
+	active := &merged.Periods[activeIdx]
+
+	if recomputed != nil {
+		var candidates []SchedulePeriod
+		for _, p := range recomputed.Periods {
+			if !p.Start.Before(active.End) {
+				candidates = append(candidates, p)
+			}
+		}
+		sort.Slice(candidates, func(i, j int) bool {
+			return candidates[i].Start.Before(candidates[j].Start)
+		})
+
+		activeHrs := active.End.Sub(active.Start).Hours()
+		baseE := active.Power / 1000 * activeHrs
+		baseC := active.Price * baseE
+		addE, addC := 0.0, 0.0
+		var extras []SchedulePeriod
+		cursor := active.End
+		for _, c := range candidates {
+			if c.Start.Equal(cursor) && c.Power == active.Power {
+				hrs := c.End.Sub(c.Start).Hours()
+				e := c.Power / 1000 * hrs
+				addE += e
+				addC += c.Price * e
+				cursor = c.End
+				continue
+			}
+			extras = append(extras, c)
+		}
+		if addE > 0 {
+			active.End = cursor
+			if total := baseE + addE; total > 0 {
+				active.Price = (baseC + addC) / total
+			}
+		}
+		if len(extras) > 0 {
+			merged.Periods = append(merged.Periods, extras...)
+			sort.Slice(merged.Periods, func(i, j int) bool {
+				return merged.Periods[i].Start.Before(merged.Periods[j].Start)
+			})
+		}
+
+		var totC, totE float64
+		for _, p := range merged.Periods {
+			hrs := p.End.Sub(p.Start).Hours()
+			e := p.Power / 1000 * hrs
+			totE += e
+			totC += p.Price * e
+		}
+		merged.Cost = math.Round(totC*100) / 100
+		merged.Energy = math.Round(totE*100) / 100
+	}
+
+	return mergeInProgressSlot(sched, merged)
 }
 
 // mergeInProgressSlot returns sched with the slot for in.Date replaced by in
@@ -776,6 +942,8 @@ func (s *Scheduler) recompute() {
 	// trip the SoC-skip / target-reached branches and stop the active session.
 	inProgress := activeSlot(prev)
 
+	s.detectMissedPeriods(prev)
+
 	if cfg == nil {
 		cfg = s.configFromStore()
 	}
@@ -938,11 +1106,12 @@ func (s *Scheduler) recompute() {
 		sched.Energy = math.Round(energy*100) / 100
 	}
 
-	// Pin the in-progress slot to its original periods. ComputeSchedule starts
-	// from now, so its slot for today would omit already-elapsed periods and
-	// could de-sync IsChargeTime from what the charger is actually running.
+	// Preserve the in-progress slot through recompute. The active period
+	// (containing now) is never shortened — but it may be extended into
+	// adjacent recomputed hours so a running session continues seamlessly
+	// when the deficit can be made up by charging a bit longer.
 	if inProgress != nil {
-		sched = mergeInProgressSlot(sched, cloneSlot(*inProgress))
+		sched = mergeActiveSlotPreservingActive(sched, cloneSlot(*inProgress))
 	}
 
 	s.mu.Lock()
@@ -1113,8 +1282,12 @@ func ComputeSchedule(rates []tariff.Rate, cfg Config, chargePowerW float64) *Sch
 	deadline := firstDeadline
 	remainingEnergy := cfg.TargetEnergy
 
-	for {
-		// Collect rates in this window (Price != 0 filters out "not yet available" zero-price placeholders)
+	// Iterate up to maxCycles deadline windows (today + tomorrow). Today may
+	// produce no eligible rates (e.g. all hours above MaxPrice, or the user
+	// plugged in close to deadline) — in that case we still try tomorrow so
+	// the deficit has a fallback window before giving up.
+	const maxCycles = 2
+	for cycle := 0; cycle < maxCycles; cycle++ {
 		var windowRates []tariff.Rate
 		for _, r := range rates {
 			if r.End.After(windowStart) && r.Start.Before(deadline) && r.Price != 0 {
@@ -1125,38 +1298,24 @@ func ComputeSchedule(rates []tariff.Rate, cfg Config, chargePowerW float64) *Sch
 			}
 		}
 
-		if len(windowRates) == 0 {
-			break
-		}
-
-		energyForSlot := remainingEnergy
-		if energyForSlot < 0 {
-			energyForSlot = 0
-		}
-		slot := computeSlot(windowRates, energyForSlot, chargePowerW, cfg.ChargeHeadroom, deadline)
-		if slot != nil {
-			slots = append(slots, *slot)
-			remainingEnergy -= slot.Energy
-		}
-
-		// Advance to next day's window
-		windowStart = deadline
-		deadline = deadline.Add(24 * time.Hour)
-
-		// Check if rates exist within the next window
-		hasMore := false
-		for _, r := range rates {
-			if r.Start.Before(deadline) && r.End.After(windowStart) && r.Price != 0 {
-				if cfg.MaxPrice > 0 && r.Price > cfg.MaxPrice {
-					continue
-				}
-				hasMore = true
-				break
+		if len(windowRates) > 0 {
+			energyForSlot := remainingEnergy
+			if energyForSlot < 0 {
+				energyForSlot = 0
+			}
+			slot := computeSlot(windowRates, energyForSlot, chargePowerW, cfg.ChargeHeadroom, deadline)
+			if slot != nil {
+				slots = append(slots, *slot)
+				remainingEnergy -= slot.Energy
 			}
 		}
-		if !hasMore {
+
+		if remainingEnergy <= 0 {
 			break
 		}
+
+		windowStart = deadline
+		deadline = deadline.Add(24 * time.Hour)
 	}
 
 	if len(slots) == 0 {
